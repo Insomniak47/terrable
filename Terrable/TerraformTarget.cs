@@ -8,6 +8,7 @@ namespace Terrable
         public string Version { get; set; }
         public string Platform { get; set; }
         public string Arch { get; set; }
+        public string Hash { get; set; }
 
         public string ArchiveFile => $"terraform_{Version}_{Platform}_{Arch}.zip";
         public string ShaFile => $"terraform_{Version}_SHA256SUMS";

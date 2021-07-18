@@ -48,8 +48,10 @@ namespace Terrable
                     _ when RuntimeInformation.IsOSPlatform(OSPlatform.Windows) => "windows",
                     _ when RuntimeInformation.IsOSPlatform(OSPlatform.Linux) => "linux",
                     _ when RuntimeInformation.IsOSPlatform(OSPlatform.OSX) => "darwin",
+                    _ when RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD) => "openbsd",
                     _ => throw new NotSupportedException("Your platform is unsupported :(")
-                }
+                },
+                Hash = opts.Hash
             };
 
             logger.LogTrace("Target created: {@target}", target);
@@ -109,6 +111,14 @@ namespace Terrable
                 Required = false,
                 HelpText = "Whether to fetch the given version from the web even if it exists in the cache")]
             public bool Force { get; set; }
+
+
+            [Option(
+                shortName: 'h',
+                longName: "hash",
+                Required = false,
+                HelpText = "The hash to check the downloaded archive against")]
+            public string Hash { get; set; }
         }
     }
 }

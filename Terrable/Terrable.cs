@@ -13,9 +13,15 @@ namespace Terrable
     {
         private readonly HttpClient _client;
         private readonly ILogger<Terrable> _logger;
-        private readonly static SHA256 _sha = SHA256.Create();
+        private static readonly SHA256 _sha = SHA256.Create();
+        private static readonly string _homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
-        private Dictionary<TerrableDirs, string> _dirs = new();
+        private readonly Dictionary<TerrableDirs, string> _dirs = new()
+        {
+            [TerrableDirs.Terrable] = Path.Join(_homeDir, "terrable"),
+            [TerrableDirs.Versions] = Path.Join(_homeDir, "terrable", "versions"),
+            [TerrableDirs.Temp] = Path.Join(_homeDir, "terrable", "temp")
+        };
 
         public Terrable(HttpClient client, ILogger<Terrable> logger)
         {
@@ -25,9 +31,7 @@ namespace Terrable
 
         public async Task RunAsync(TerraformTarget target, bool force)
         {
-            _dirs = ComputeDirectories();
             _logger.LogTrace("Creating directories");
-
             Directory.CreateDirectory(_dirs[TerrableDirs.Terrable]);
             Directory.CreateDirectory(_dirs[TerrableDirs.Versions]);
             Directory.CreateDirectory(_dirs[TerrableDirs.Temp]);
@@ -57,10 +61,9 @@ namespace Terrable
             _logger.LogInformation("Downloaded file successfully");
             var hashMatch = await CheckHashAsync(archiveFile.FullName, target);
 
-            _logger.LogInformation("Hashes match ✔");
             if (!hashMatch)
             {
-                _logger.LogError("Cannot verify file hash, aborting");
+                _logger.LogError("Cannot verify file hash, aborting ❌");
                 return;
             }
 
@@ -74,6 +77,7 @@ namespace Terrable
             Directory.Delete(_dirs[TerrableDirs.Temp]);
         }
 
+        //I47: Probably trace logging in this as well
         private void OverwriteFromCached(TerraformTarget target)
         {
             var versionedTarget = Path.Join(_dirs[TerrableDirs.Versions], target.VersionedExcutableName);
@@ -81,6 +85,7 @@ namespace Terrable
             File.Copy(versionedTarget, unversionedExe, true);
         }
 
+        //I47: Probably its own class and strategy here
         private async Task<bool> CheckHashAsync(string filePath, TerraformTarget target)
         {
             var hashList = await GetHashListAsync(target);
@@ -91,13 +96,29 @@ namespace Terrable
 
             if (!hashList.TryGetValue(hash, out var fileName))
             {
-                _logger.LogError($"Cannot fetch hash with value '{hash}'");
+                _logger.LogError($"❌ - Cannot fetch hash with value '{hash}'");
 
                 return false;
             }
-
             _logger.LogInformation($"Hash found that corresponds with archive file: {fileName}");
-            return target.ArchiveFile.Equals(fileName, StringComparison.OrdinalIgnoreCase);
+
+            if (!target.ArchiveFile.Equals(fileName, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("❌ - Hashes failed consistency check");
+                return false;
+            }
+
+            _logger.LogInformation("✔ - Hashes pass consistency check");
+
+
+            if (target.Hash != null && !hash.Equals(target.Hash, StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogInformation("❌ - Hash does not match the provided hash");
+                return false;
+            }
+
+            _logger.LogInformation("✔ - Hash is good to go");
+            return true;
         }
 
         private string GetHash(string path)
@@ -105,18 +126,6 @@ namespace Terrable
             var fs = File.OpenRead(path);
             var hash = _sha.ComputeHash(fs);
             return BitConverter.ToString(hash).Replace("-", "").ToLower();
-        }
-
-        private static Dictionary<TerrableDirs, string> ComputeDirectories()
-        {
-            var homeDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-
-            return new Dictionary<TerrableDirs, string>
-            {
-                [TerrableDirs.Terrable] = Path.Join(homeDir, "terrable"),
-                [TerrableDirs.Versions] = Path.Join(homeDir, "terrable", "versions"),
-                [TerrableDirs.Temp] = Path.Join(homeDir, "terrable", "temp")
-            };
         }
 
         private async Task<FileInfo> DownloadAsync(Uri url, string targetPath)
