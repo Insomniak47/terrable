@@ -56,6 +56,7 @@ namespace Terrable
             if (archiveFile == null)
             {
                 _logger.LogError($"Failed to download file - Is the version valid? {target.ArchiveUrl}");
+                return;
             }
 
             _logger.LogInformation("Downloaded file successfully");
